@@ -1,49 +1,37 @@
-# Unity Care Clinic - AI Triage & Booking Assistant
+# MedBridge AI - Unity Care Clinic
 
-A modern, accessible chat interface for medical appointment booking and triage assistance. Built with FastAPI backend and pure HTML/CSS/JS frontend.
+A modern, bilingual AI-powered medical triage and appointment booking system. Built with FastAPI backend, MCP (Model Context Protocol) integration, and a clean HTML/CSS/JS frontend.
 
 ## ✨ Features
 
-### 🎨 Visual & UX Improvements
-- **Modern Design System**: 8px spacing scale, consistent design tokens, light/dark theme support
-- **Typography**: 16px base font with 1.6 line-height for optimal readability
-- **Responsive Layout**: 820px max-width on desktop, mobile-optimized with safe-area padding
-- **Message Bubbles**: 640px max-width, improved contrast and spacing
-- **Auto-resizing Input**: Smart textarea that grows up to 3 lines max
+### 🏥 Medical Triage & Booking
+- **Intelligent Symptom Analysis**: AI-powered condition classification (fever, headache, flu, eye issues, skin problems)
+- **Doctor Matching**: Automatic doctor recommendations based on symptoms and specialization
+- **Real-time Availability**: Google Calendar integration for live appointment slots
+- **Bilingual Support**: English and Roman Urdu with automatic translation
+- **Appointment Booking**: Complete booking flow with email confirmations and calendar invites
 
 ### 💬 Chat Experience
-- **Streaming Responses**: Real-time token streaming for faster perceived performance
-- **Message Grouping**: Consecutive messages grouped by sender with timestamps
-- **Smart Suggestions**: Context-aware action chips for common tasks
-- **Language Support**: English and Roman Urdu with automatic translation
-- **Session Persistence**: Resume previous conversations with localStorage
-
-### 🏥 Medical Features
-- **Doctor Cards**: Compact cards showing avatar, name, specialty, fees, and availability
-- **Date Tabs**: Today, Tomorrow, and specific dates with horizontal scrolling on mobile
-- **Slot Selection**: Visual time slot chips in 3-4 column grid
-- **Booking Flow**: Step-by-step appointment booking with confirmation
-- **Success Cards**: Beautiful confirmation cards with calendar integration
-
-### ♿ Accessibility
-- **Keyboard Navigation**: Tab through chips, Esc to clear, Cmd/Ctrl+K to focus
-- **Screen Reader Support**: ARIA labels, semantic HTML, focus management
-- **High Contrast**: 4.5:1 contrast ratio maintained across themes
-- **Focus Indicators**: Visible focus rings for all interactive elements
+- **Streaming Responses**: Real-time token streaming for natural conversation flow
+- **Session Persistence**: Resume conversations with localStorage
+- **Smart Formatting**: Clean display of doctor availability with bullet points
+- **Error Handling**: Graceful retry with exponential backoff
+- **Mobile Responsive**: Optimized for all device sizes
 
 ### 🔧 Technical Features
-- **Error Handling**: Graceful retry with exponential backoff
-- **Analytics**: Event tracking for user interactions and system performance
-- **Security**: No secrets in browser, HTTPS communication with backend
-- **Performance**: Optimized rendering, minimal reflows, efficient DOM updates
+- **MCP Integration**: Model Context Protocol for seamless AI tool calling
+- **Google Calendar API**: Real-time availability checking and appointment creation
+- **SMTP Integration**: Automated email notifications and confirmations
+- **Environment Security**: Proper .gitignore and environment variable management
+- **FastAPI Backend**: Modern async web framework with streaming support
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8+
+- Python 3.13+
 - OpenAI API key
-- Google Calendar API credentials (for booking)
-- SMTP credentials (for email notifications)
+- Google Calendar API credentials
+- SMTP credentials (Gmail, Outlook, etc.)
 
 ### Installation
 
@@ -58,16 +46,39 @@ pip install -r requirements.txt
 
 2. **Configure environment**:
 ```bash
-cp config.env.example config.env
-# Edit config.env with your API keys and settings
+# Create .env file with your credentials
+cp .env.example .env
+# Edit .env with your API keys and settings
 ```
 
-3. **Run the application**:
+3. **Required Environment Variables**:
 ```bash
-python -m uvicorn api:app --reload --host 0.0.0.0 --port 8000
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+
+# Google Calendar Configuration
+GOOGLE_SERVICE_ACCOUNT_FILE=path/to/service-account.json
+CLINIC_TIMEZONE=Asia/Karachi
+
+# SMTP Configuration
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password
+SMTP_FROM=your_email@gmail.com
+
+# Optional Configuration
+MIN_LEAD_MINUTES=30
+PORT=8000
 ```
 
-4. **Access the interface**:
+4. **Run the application**:
+```bash
+python api.py
+```
+
+5. **Access the interface**:
    - Open http://localhost:8000 in your browser
    - The chat interface will load automatically
 
@@ -79,14 +90,10 @@ User: "I have a headache"
 Assistant: "I can help you find a doctor for your headache. Let me search for available specialists..."
 ```
 
-### Appointment Booking
+### Doctor-Specific Booking
 ```
-User: "Book an appointment with Dr. Smith tomorrow"
-Assistant: "I found Dr. Smith's available slots for tomorrow:
-- 10:00 AM
-- 2:30 PM
-- 4:15 PM
-Which time works for you?"
+User: "Dr Diego is available in this week?"
+Assistant: "Let me check Dr. Diego's availability for this week..."
 ```
 
 ### Language Support
@@ -95,40 +102,91 @@ User: "Mujhe bukhar hai" (Roman Urdu for "I have fever")
 Assistant: "I understand you have a fever. Let me find appropriate doctors for you..."
 ```
 
+### Availability Display
+The system now displays availability in a clean, structured format:
+```
+Tuesday, September 09
+• 11:00
+• 11:30
+• 12:00
+• 12:30
+• 16:00
+• 16:30
+• 17:00
+• 17:30
+
+Thursday, September 11
+• 11:00
+• 11:30
+• 12:00
+• 12:30
+```
+
 ## 🏗️ Architecture
 
-### Frontend (static/chat.html)
+### Frontend (`static/chat.html`)
 - **Pure HTML/CSS/JS**: No build process, no frameworks
-- **Design Tokens**: CSS custom properties for consistent theming
-- **Component System**: Reusable doctor cards, date tabs, success cards
-- **State Management**: Simple localStorage for session persistence
+- **Modern Design System**: CSS custom properties with consistent spacing and colors
+- **Real-time Streaming**: Server-sent events for live chat experience
+- **Responsive Design**: Mobile-first approach with clean UI
 
-### Backend (api.py)
+### Backend (`api.py`)
 - **FastAPI**: Modern async web framework
-- **MCP Integration**: Model Context Protocol for tool calling
-- **Streaming**: Server-sent events for real-time responses
-- **Error Handling**: Retry logic with exponential backoff
+- **MCP Integration**: Model Context Protocol for AI tool calling
+- **Streaming Support**: Real-time response streaming
+- **Language Detection**: Automatic English/Roman Urdu detection and translation
+- **Post-processing**: Automatic formatting fixes for clean output
 
-### MCP Server (server.py)
-- **Google Calendar**: Appointment scheduling and availability
+### MCP Server (`server.py`)
+- **Google Calendar**: Appointment scheduling and availability checking
 - **SMTP**: Email notifications and confirmations
 - **Doctor Database**: JSON-based doctor directory with condition mapping
+- **Availability Engine**: Smart slot calculation with calendar integration
+
+### Data Structure (`data/doctors.json`)
+```json
+{
+  "doctors": [
+    {
+      "doctor_id": "dr_eric",
+      "name": "Dr. Eric",
+      "specialization": "Ophthalmology",
+      "experience_years": 7,
+      "fees": { "online_pkr": 2500, "inperson_pkr": 3500 },
+      "weekly_schedule": {
+        "Mon": ["10:00-12:00", "15:00-17:00"],
+        "Wed": ["10:00-12:00"],
+        "Fri": ["15:00-17:00"]
+      },
+      "calendar_id": "ericpatsilevas83@gmail.com",
+      "location": "Unity Care Clinic, Lahore",
+      "email": "ericpatsilevas83@gmail.com"
+    }
+  ],
+  "condition_map": {
+    "fever": ["dr_ali"],
+    "headache": ["dr_ali"],
+    "flu": ["dr_ali"],
+    "eye_issue": ["dr_eric"],
+    "skin_rash": ["dr_diego"]
+  }
+}
+```
 
 ## 🎨 Design System
 
 ### Colors
 ```css
-/* Light Theme (Default) */
---bg: #f5f7ff
---text: #0a0f1f
---brand: #7c9cff
---border: #e3e8ff
-
-/* Dark Theme */
---bg: #0a0f1f
---text: #e9edff
---brand: #7c9cff
---border: #26305f
+/* MedBridge AI Theme */
+--primary-gradient: linear-gradient(135deg, #f3f9ff 0%, #eaf6ff 100%);
+--secondary-gradient: linear-gradient(180deg, #f0f7ff 0%, #e7f3ff 100%);
+--heart-green: #38bdf8;
+--ai-green: #38bdf8;
+--text-dark: #0f172a;
+--bg-page: #f7fbff;
+--bg-light: #ffffff;
+--accent: #0ea5e9;
+--text-muted: #6b7280;
 ```
 
 ### Spacing Scale
@@ -140,74 +198,83 @@ Assistant: "I understand you have a fever. Let me find appropriate doctors for y
 --spacing-xl: 32px
 ```
 
-### Border Radius
-```css
---radius-sm: 8px
---radius-md: 12px
---radius-lg: 16px
-```
-
-## 📊 Analytics Events
-
-The system tracks these events for monitoring and improvement:
-
-- `message_sent`: User sends a message
-- `response_received`: Assistant responds successfully
-- `doctor_lookup`: Doctor search performed
-- `slots_shown`: Available time slots displayed
-- `booking_success`: Appointment booked successfully
-- `error_occurred`: System errors with retry attempts
-
-## 🔒 Privacy & Security
-
-- **No Sensitive Data**: Medical information not stored permanently
-- **Session Isolation**: Each chat session is independent
-- **HTTPS Only**: All communication encrypted in production
-- **Minimal Logging**: Only essential analytics data collected
-- **User Control**: Clear privacy policy and data deletion options
-
-## 🚀 Deployment
-
-### Render (Recommended)
-1. Connect your GitHub repository
-2. Set environment variables in Render dashboard
-3. Deploy with Python runtime
-4. Configure custom domain and SSL
-
-### Other Platforms
-- **Heroku**: Add `Procfile` with `web: uvicorn api:app --host 0.0.0.0 --port $PORT`
-- **Railway**: Direct deployment from GitHub
-- **DigitalOcean**: App Platform with Python runtime
-
 ## 🧪 Testing
 
 ### Manual Testing
 ```bash
 # Start the server
-python -m uvicorn api:app --reload
+python api.py
 
 # Test streaming endpoint
 python test_streaming.py
 
+# Test MCP functionality
+python test_mcp.py
+
 # Open browser to http://localhost:8000
 ```
 
-### Automated Testing
+### Diagnostic Tools
 ```bash
-# Run API tests
-pytest test_api.py
+# Test environment variables
+python diag_env.py
 
-# Run frontend tests
-npm test  # If using testing framework
+# Test Google Calendar connection
+python diag_google_calendar.py
+
+# Test SMTP configuration
+python diag_smtp.py
+```
+
+## 🔒 Security & Privacy
+
+- **Environment Variables**: All sensitive data stored in `.env` (not tracked by git)
+- **No Browser Secrets**: All API keys remain server-side
+- **Session Isolation**: Each chat session is independent
+- **Minimal Data Storage**: Only essential session data in localStorage
+- **HTTPS Ready**: Production-ready with SSL support
+
+## 🚀 Deployment
+
+### Environment Setup
+1. Set all required environment variables in your hosting platform
+2. Ensure Google Service Account JSON is accessible
+3. Configure SMTP credentials for email notifications
+
+### Platform Examples
+- **Render**: Python runtime with environment variables
+- **Railway**: Direct GitHub deployment
+- **DigitalOcean**: App Platform with Python runtime
+- **Heroku**: Add `Procfile` with `web: python api.py`
+
+## 📁 Project Structure
+
+```
+triage-mcp/
+├── api.py                 # FastAPI backend with streaming
+├── server.py              # MCP server with Google Calendar integration
+├── client.py              # Standalone MCP client for testing
+├── static/
+│   └── chat.html          # Frontend chat interface
+├── data/
+│   └── doctors.json       # Doctor database and condition mapping
+├── diag_*.py              # Diagnostic tools for testing
+├── test_*.py              # Test scripts
+├── .env                   # Environment variables (not tracked)
+├── .gitignore             # Git ignore rules
+├── pyproject.toml         # Python dependencies
+└── README.md              # This file
 ```
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
+2. Create a feature branch: `git checkout -b feature-name`
 3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+4. Test thoroughly with diagnostic tools
+5. Commit your changes: `git commit -m 'Add feature'`
+6. Push to the branch: `git push origin feature-name`
+7. Submit a pull request
 
 ## 📝 License
 
@@ -216,10 +283,10 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🆘 Support
 
 - **Emergency**: Call 1122 (Pakistan emergency services)
-- **Technical Issues**: Contact clinic IT support
-- **Appointment Changes**: Use chat interface or call clinic directly
-- **Privacy Concerns**: Review privacy policy or contact clinic management
+- **Technical Issues**: Check diagnostic tools and logs
+- **Appointment Changes**: Use chat interface or contact clinic directly
+- **Privacy Concerns**: Review environment variable configuration
 
 ---
 
-Built with ❤️ for Unity Care Clinic
+Built with ❤️ for Unity Care Clinic - Making healthcare accessible through AI
