@@ -2,30 +2,30 @@
 
 A modern, bilingual AI-powered medical triage and appointment booking system. Built with FastAPI backend, MCP (Model Context Protocol) integration, and a clean HTML/CSS/JS frontend.
 
-## ✨ Features
+## Features
 
-### 🏥 Medical Triage & Booking
+### Medical Triage & Booking
 - **Intelligent Symptom Analysis**: AI-powered condition classification (fever, headache, flu, eye issues, skin problems)
 - **Doctor Matching**: Automatic doctor recommendations based on symptoms and specialization
 - **Real-time Availability**: Google Calendar integration for live appointment slots
 - **Bilingual Support**: English and Roman Urdu with automatic translation
 - **Appointment Booking**: Complete booking flow with email confirmations and calendar invites
 
-### 💬 Chat Experience
+### Chat Experience
 - **Streaming Responses**: Real-time token streaming for natural conversation flow
 - **Session Persistence**: Resume conversations with localStorage
 - **Smart Formatting**: Clean display of doctor availability with bullet points
 - **Error Handling**: Graceful retry with exponential backoff
 - **Mobile Responsive**: Optimized for all device sizes
 
-### 🔧 Technical Features
+### Technical Features
 - **MCP Integration**: Model Context Protocol for seamless AI tool calling
 - **Google Calendar API**: Real-time availability checking and appointment creation
 - **SMTP Integration**: Automated email notifications and confirmations
 - **Environment Security**: Proper .gitignore and environment variable management
 - **FastAPI Backend**: Modern async web framework with streaming support
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.13+
@@ -37,8 +37,8 @@ A modern, bilingual AI-powered medical triage and appointment booking system. Bu
 
 1. **Clone and setup**:
 ```bash
-git clone <repository>
-cd triage-mcp
+git clone https://github.com/abdulwaheed-aiengineer/MedBridge-AI-using-MCP.git
+cd MedBridge-AI-using-MCP
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -82,7 +82,7 @@ python api.py
    - Open http://localhost:8000 in your browser
    - The chat interface will load automatically
 
-## 🎯 Usage Examples
+## Usage Examples
 
 ### Basic Triage
 ```
@@ -122,28 +122,28 @@ Thursday, September 11
 • 12:30
 ```
 
-## 🏗️ Architecture
+## Architecture
 
-### Frontend (`static/chat.html`)
+### Frontend (static/chat.html)
 - **Pure HTML/CSS/JS**: No build process, no frameworks
 - **Modern Design System**: CSS custom properties with consistent spacing and colors
 - **Real-time Streaming**: Server-sent events for live chat experience
 - **Responsive Design**: Mobile-first approach with clean UI
 
-### Backend (`api.py`)
+### Backend (api.py)
 - **FastAPI**: Modern async web framework
 - **MCP Integration**: Model Context Protocol for AI tool calling
 - **Streaming Support**: Real-time response streaming
 - **Language Detection**: Automatic English/Roman Urdu detection and translation
 - **Post-processing**: Automatic formatting fixes for clean output
 
-### MCP Server (`server.py`)
+### MCP Server (server.py)
 - **Google Calendar**: Appointment scheduling and availability checking
 - **SMTP**: Email notifications and confirmations
 - **Doctor Database**: JSON-based doctor directory with condition mapping
 - **Availability Engine**: Smart slot calculation with calendar integration
 
-### Data Structure (`data/doctors.json`)
+### Data Structure (data/doctors.json)
 ```json
 {
   "doctors": [
@@ -173,7 +173,7 @@ Thursday, September 11
 }
 ```
 
-## 🎨 Design System
+## Design System
 
 ### Colors
 ```css
@@ -198,43 +198,25 @@ Thursday, September 11
 --spacing-xl: 32px
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Manual Testing
 ```bash
 # Start the server
 python api.py
 
-# Test streaming endpoint
-python test_streaming.py
-
-# Test MCP functionality
-python test_mcp.py
-
 # Open browser to http://localhost:8000
 ```
 
-### Diagnostic Tools
-```bash
-# Test environment variables
-python diag_env.py
+## Security & Privacy
 
-# Test Google Calendar connection
-python diag_google_calendar.py
-
-# Test SMTP configuration
-python diag_smtp.py
-```
-
-## 🔒 Security & Privacy
-
-- **Environment Variables**: All sensitive data stored in `.env` (not tracked by git)
+- **Environment Variables**: All sensitive data stored in .env (not tracked by git)
 - **No Browser Secrets**: All API keys remain server-side
 - **Session Isolation**: Each chat session is independent
 - **Minimal Data Storage**: Only essential session data in localStorage
 - **HTTPS Ready**: Production-ready with SSL support
 
-## 🚀 Deployment
+## Deployment
 
 ### Environment Setup
 1. Set all required environment variables in your hosting platform
@@ -245,9 +227,9 @@ python diag_smtp.py
 - **Render**: Python runtime with environment variables
 - **Railway**: Direct GitHub deployment
 - **DigitalOcean**: App Platform with Python runtime
-- **Heroku**: Add `Procfile` with `web: python api.py`
+- **Heroku**: Add Procfile with web: python api.py
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 triage-mcp/
@@ -258,35 +240,33 @@ triage-mcp/
 │   └── chat.html          # Frontend chat interface
 ├── data/
 │   └── doctors.json       # Doctor database and condition mapping
-├── diag_*.py              # Diagnostic tools for testing
-├── test_*.py              # Test scripts
 ├── .env                   # Environment variables (not tracked)
 ├── .gitignore             # Git ignore rules
 ├── pyproject.toml         # Python dependencies
 └── README.md              # This file
 ```
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
+2. Create a feature branch: git checkout -b feature-name
 3. Make your changes
-4. Test thoroughly with diagnostic tools
-5. Commit your changes: `git commit -m 'Add feature'`
-6. Push to the branch: `git push origin feature-name`
+4. Test thoroughly
+5. Commit your changes: git commit -m 'Add feature'
+6. Push to the branch: git push origin feature-name
 7. Submit a pull request
 
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🆘 Support
+## Support
 
 - **Emergency**: Call 1122 (Pakistan emergency services)
-- **Technical Issues**: Check diagnostic tools and logs
+- **Technical Issues**: Check logs and environment configuration
 - **Appointment Changes**: Use chat interface or contact clinic directly
 - **Privacy Concerns**: Review environment variable configuration
 
 ---
 
-Built with ❤️ for Unity Care Clinic - Making healthcare accessible through AI
+Built with love for Unity Care Clinic - Making healthcare accessible through AI
