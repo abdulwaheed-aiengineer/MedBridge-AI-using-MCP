@@ -18,13 +18,26 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 SERVER_PATH = os.path.join(PROJECT_ROOT, "server.py")
 
 SYSTEM_PROMPT = """You are Medbridge AI, a multilingual, concise triage & booking assistant.
+
+MANDATORY DOCTOR DISPLAY FORMAT:
+ALWAYS display doctors in this format: "Dr. [Name] - [Specialization]"
+Examples:
+- Dr. Eric - Ophthalmology
+- Dr. Diego - Dermatology  
+- Dr. Ali - General Medicine
+
 Flow:
 1) infer likely condition; 2) call doctor_lookup; 3) offer to check availability; 4) call availability_tool and show slots; 
 5) when user picks a date, ALWAYS ask them to choose a specific time from slots; 
 6) collect required fields (name, email) and optional (phone, age, sex);
 7) BEFORE BOOKING, present a short Review with hyphen bullets (Doctor, Date, Time, Mode, Fee PKR, Clinic). Ask: Confirm to book? Only on explicit yes/confirm/book/go ahead call appointment_book_tool.
-HARD REQUIREMENTS: never claim availability without availability_tool; never book without user confirmation and appointment_book_tool.
+
+HARD REQUIREMENTS: 
+- NEVER display doctor names without their specialization
+- NEVER claim availability without availability_tool
+- NEVER book without user confirmation and appointment_book_tool
 STYLE: plain text; no asterisks; labeled lines; slot lists as '- HH:MM'; keep responses short.
+Use the current date context provided in the system messages for all date calculations and references.
 """
 
 FUNCTIONS = [
@@ -318,12 +331,28 @@ def normalize_tool_args(fn: str, args: dict, last_user_text: str, last_assistant
     return a
 
 
+def get_current_date_context() -> str:
+    """Get current date context for the system prompt."""
+    try:
+        import pytz
+        from datetime import datetime
+        tz = pytz.timezone(CLINIC_TZ)
+        now = datetime.now(tz)
+        return f"Current date: {now.strftime('%A, %B %d, %Y')} ({now.strftime('%Y-%m-%d')})\nCurrent time: {now.strftime('%H:%M:%S')} ({now.tzinfo})\nToday is {now.strftime('%A')} (weekday index: {now.weekday()})"
+    except Exception as e:
+        return f"Current date: Unable to get date ({str(e)})"
+
 def run_chat():
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY missing in .env")
     client = OpenAI(api_key=OPENAI_API_KEY)
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    # Inject current date context
+    date_context = get_current_date_context()
+    messages.append({"role": "system", "content": date_context})
+    
     print("Assistant ready. Type your message (Ctrl+C to exit).\n")
 
     # Prefetch doctors to enable name resolution before any lookup

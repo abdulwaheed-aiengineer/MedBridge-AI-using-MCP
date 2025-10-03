@@ -34,13 +34,35 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 SYSTEM_PROMPT = """You are Medbridge AI, a bilingual triage & booking assistant supporting English and Roman Urdu only.
+
+MEDICAL TERMINOLOGY MAPPING:
+- "skin specialist" = dermatologist (Dr. Diego - Dermatology)
+- "dermatologist" = skin doctor (Dr. Diego - Dermatology)  
+- "eye specialist" = ophthalmologist (Dr. Eric - Ophthalmology)
+- "ophthalmologist" = eye doctor (Dr. Eric - Ophthalmology)
+- "general doctor" = family physician (Dr. Ali - General Medicine)
+- "family doctor" = general practitioner (Dr. Ali - General Medicine)
+
+MANDATORY DOCTOR DISPLAY FORMAT:
+ALWAYS display doctors in this format: "Dr. [Name] - [Specialization]"
+Examples:
+- Dr. Eric - Ophthalmology
+- Dr. Diego - Dermatology  
+- Dr. Ali - General Medicine
+
 Flow:
-1) If user asks about specific doctor by name, call doctor_lookup_by_name then doctor_weekly_availability;
-2) If user has symptoms, infer likely condition and call doctor_lookup; 3) offer to check availability; 4) call availability_tool and show slots;
-5) when user picks a date, ALWAYS ask them to choose a specific time from slots;
-6) collect required fields (name, email) and optional (phone, age, sex);
-7) BEFORE BOOKING, present a short Review with hyphen bullets (Doctor, Date, Time, Mode, Fee PKR, Clinic). Ask: Confirm to book? Only on explicit yes/confirm/book/go ahead call appointment_book_tool.
-HARD REQUIREMENTS: never claim availability without availability_tool; never book without user confirmation and appointment_book_tool.
+1) If user asks "any doctor available" or "what doctors do you have", call list_doctors to show ALL doctors with format "Dr. [Name] - [Specialization]";
+2) If user asks about specific doctor by name, call doctor_lookup_by_name then doctor_weekly_availability;
+3) If user has symptoms or asks for specialist type, infer likely condition and call doctor_lookup; 
+4) offer to check availability; 5) call availability_tool and show slots;
+6) when user picks a date, ALWAYS ask them to choose a specific time from slots;
+7) collect required fields (name, email) and optional (phone, age, sex);
+8) BEFORE BOOKING, present a short Review with hyphen bullets (Doctor, Date, Time, Mode, Fee PKR, Clinic). Ask: Confirm to book? Only on explicit yes/confirm/book/go ahead call appointment_book_tool.
+
+HARD REQUIREMENTS: 
+- NEVER display doctor names without their specialization
+- NEVER claim availability without availability_tool
+- NEVER book without user confirmation and appointment_book_tool
 STYLE: plain text; no asterisks; labeled lines; slot lists as '- HH:MM'; keep responses short.
 LANGUAGE: Only respond in English or Roman Urdu. Never use other languages like Spanish, French, etc.
 
@@ -166,14 +188,26 @@ def _translate_to_english(text: str) -> Dict[str, str]:
 
 def _classify_intent_condition(text: str) -> str | None:
     """
-    Use the LLM to map user text to one of known conditions:
-    {fever, headache, flu, eye_issue, skin_rash}.
+    Use the LLM to map user text to medical conditions or doctor types.
     Returns the condition string or None.
     """
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
         prompt = (
-            "Classify the user's health concern into one of: fever, headache, flu, eye_issue, skin_rash. "
+            "Classify the user's health concern or doctor request into one of these categories:\n"
+            "GENERAL CONDITIONS: fever, headache, flu, general, family_doctor, primary_care\n"
+            "SKIN CONDITIONS: skin_rash, dermatology, skin_specialist, skin_problem, skin_disease, acne, eczema, psoriasis\n"
+            "EYE CONDITIONS: eye_issue, ophthalmology, eye_specialist, eye_problem, vision\n"
+            "\n"
+            "Examples:\n"
+            "- 'skin specialist' -> dermatology\n"
+            "- 'dermatologist' -> dermatology\n"
+            "- 'skin problem' -> skin_problem\n"
+            "- 'eye doctor' -> eye_specialist\n"
+            "- 'ophthalmologist' -> ophthalmology\n"
+            "- 'general doctor' -> general_physician\n"
+            "- 'family doctor' -> family_doctor\n"
+            "\n"
             "If none applies, return none. Reply strictly as JSON: {\"condition\": \"<one_of_above_or_none>\"}."
         )
         resp = client.chat.completions.create(
@@ -189,12 +223,40 @@ def _classify_intent_condition(text: str) -> str | None:
         cond = (data or {}).get("condition")
         if isinstance(cond, str):
             cond = cond.strip().lower()
-            if cond in {"fever", "headache", "flu", "eye_issue", "skin_rash"}:
+            # Check if it's a valid condition
+            valid_conditions = {
+                "fever", "headache", "flu", "eye_issue", "skin_rash",
+                "dermatology", "skin_specialist", "skin_problem", "skin_disease", 
+                "acne", "eczema", "psoriasis", "ophthalmology", "eye_specialist", 
+                "eye_problem", "vision", "general", "general_physician", 
+                "family_doctor", "primary_care"
+            }
+            if cond in valid_conditions:
                 return cond
     except Exception:
         pass
     return None
 
+
+def _detect_general_doctor_query(text: str) -> bool:
+    """
+    Detect if user is asking about general doctor availability.
+    """
+    text_lower = text.lower().strip()
+    general_queries = [
+        "is there any doctor available",
+        "are there any doctors available",
+        "what doctors are available",
+        "which doctors are available",
+        "show me all doctors",
+        "list all doctors",
+        "what doctors do you have",
+        "available doctors",
+        "doctors available",
+        "any doctor",
+        "any doctors"
+    ]
+    return any(query in text_lower for query in general_queries)
 
 def _detect_doctor_name(text: str) -> str | None:
     """
@@ -252,6 +314,17 @@ def _build_session_hint(state: Dict[str, Any]) -> str:
         "Session memory: " + summary + ". "
         "When helpful, begin your reply with a one-line recap of the plan before proceeding."
     )
+
+def _get_current_date_context() -> str:
+    """Get current date context for the system prompt."""
+    try:
+        import pytz
+        from datetime import datetime
+        tz = pytz.timezone("Asia/Karachi")
+        now = datetime.now(tz)
+        return f"Current date: {now.strftime('%A, %B %d, %Y')} ({now.strftime('%Y-%m-%d')})\nCurrent time: {now.strftime('%H:%M:%S')} ({now.tzinfo})\nToday is {now.strftime('%A')} (weekday index: {now.weekday()})"
+    except Exception as e:
+        return f"Current date: Unable to get date ({str(e)})"
 
 def _force_proper_formatting(content: str) -> str:
     """
@@ -421,6 +494,11 @@ FUNCTIONS = [
             },
             "required": ["doctor_name"]
         }
+    },
+    {
+        "name": "list_doctors",
+        "description": "List all available doctors with their specializations, experience, and fees.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
     }
 ]
 
@@ -436,6 +514,7 @@ TOOL_MAP = {
     "reschedule_tool": mcp_tools.reschedule_tool,
     "doctor_lookup_by_name": mcp_tools.doctor_lookup_by_name,
     "doctor_weekly_availability": mcp_tools.doctor_weekly_availability,
+    "list_doctors": mcp_tools.list_doctors,
     "now_tool": mcp_tools.now_tool,
 }
 
@@ -483,6 +562,10 @@ async def chat(body: ChatIn):
     session = SESSIONS.setdefault(session_id, {"messages": [{"role": "system", "content": SYSTEM_PROMPT}]})
     messages = session["messages"]
 
+    # Inject current date context
+    date_context = _get_current_date_context()
+    messages.append({"role": "system", "content": date_context})
+
     # Inject normalization hint if roman Urdu tokens detected
     hint = _normalization_hint(body.user)
     if hint:
@@ -498,16 +581,21 @@ async def chat(body: ChatIn):
     # Intent classification hint
     _intent = _classify_intent_condition(translated_user_message['english'])
     if _intent:
-        messages.append({"role": "system", "content": f"Intent condition: {_intent}. If symptoms are present, call doctor_lookup with condition='{_intent}'."})
+        messages.append({"role": "system", "content": f"Intent condition: {_intent}. If symptoms are present, call doctor_lookup with condition='{_intent}'. When showing results, ALWAYS display as 'Dr. [Name] - [Specialization]' format."})
         # Update session with detected condition
         session["last_condition"] = _intent
     # Update session with language
     session["lang"] = translated_user_message['lang']
     
+    # General doctor availability detection
+    if _detect_general_doctor_query(translated_user_message['english']):
+        messages.append({"role": "system", "content": "User is asking about general doctor availability. Call list_doctors to show all available doctors. MANDATORY: Display each doctor as 'Dr. [Name] - [Specialization]' with their experience, fees, and schedule. Example: 'Dr. Eric - Ophthalmology (7 years, PKR 2500 online)'"})
+        session["last_query_type"] = "general_doctors"
+    
     # Doctor name detection
     detected_doctor = _detect_doctor_name(translated_user_message['english'])
     if detected_doctor:
-        messages.append({"role": "system", "content": f"User asking about specific doctor: {detected_doctor}. Call doctor_lookup_by_name with doctor_name='{detected_doctor}' to find the doctor, then doctor_weekly_availability to show their schedule for next 7 days."})
+        messages.append({"role": "system", "content": f"User asking about specific doctor: {detected_doctor}. Call doctor_lookup_by_name with doctor_name='{detected_doctor}' to find the doctor, then doctor_weekly_availability to show their schedule for next 7 days. When displaying doctor info, ALWAYS show as 'Dr. [Name] - [Specialization]' format."})
         session["last_doctor_query"] = detected_doctor
     
     
@@ -518,7 +606,7 @@ async def chat(body: ChatIn):
         messages.append({"role": "system", "content": "Respond in English. Keep tool arguments in English."})
     
     # Strict tool usage
-    messages.append({"role": "system", "content": "For any current date/time or day-of-week question, call now_tool and answer from it. For any slots/dates/times, call availability_tool and only present what it returns. If the user challenges availability, re-check availability_tool for the mentioned date and correct yourself."})
+    messages.append({"role": "system", "content": "For any slots/dates/times, call availability_tool and only present what it returns. If the user challenges availability, re-check availability_tool for the mentioned date and correct yourself. Use the current date context provided above for date calculations."})
     # Fallback rule hint
     messages.append({"role": "system", "content": "If doctor_lookup returns empty, suggest a General Physician (Dr. Ali) instead of saying no doctors available."})
 
@@ -601,6 +689,10 @@ async def chat_stream(body: ChatIn):
     session = SESSIONS.setdefault(session_id, {"messages": [{"role": "system", "content": SYSTEM_PROMPT}]})
     messages = session["messages"]
 
+    # Inject current date context
+    date_context = _get_current_date_context()
+    messages.append({"role": "system", "content": date_context})
+
     # Inject normalization hint if roman Urdu tokens detected
     hint = _normalization_hint(body.user)
     if hint:
@@ -616,16 +708,21 @@ async def chat_stream(body: ChatIn):
     # Intent classification hint
     _intent = _classify_intent_condition(translated_user_message['english'])
     if _intent:
-        messages.append({"role": "system", "content": f"Intent condition: {_intent}. If symptoms are present, call doctor_lookup with condition='{_intent}'."})
+        messages.append({"role": "system", "content": f"Intent condition: {_intent}. If symptoms are present, call doctor_lookup with condition='{_intent}'. When showing results, ALWAYS display as 'Dr. [Name] - [Specialization]' format."})
         # Update session with detected condition
         session["last_condition"] = _intent
     # Update session with language
     session["lang"] = translated_user_message['lang']
     
+    # General doctor availability detection
+    if _detect_general_doctor_query(translated_user_message['english']):
+        messages.append({"role": "system", "content": "User is asking about general doctor availability. Call list_doctors to show all available doctors. MANDATORY: Display each doctor as 'Dr. [Name] - [Specialization]' with their experience, fees, and schedule. Example: 'Dr. Eric - Ophthalmology (7 years, PKR 2500 online)'"})
+        session["last_query_type"] = "general_doctors"
+    
     # Doctor name detection
     detected_doctor = _detect_doctor_name(translated_user_message['english'])
     if detected_doctor:
-        messages.append({"role": "system", "content": f"User asking about specific doctor: {detected_doctor}. Call doctor_lookup_by_name with doctor_name='{detected_doctor}' to find the doctor, then doctor_weekly_availability to show their schedule for next 7 days."})
+        messages.append({"role": "system", "content": f"User asking about specific doctor: {detected_doctor}. Call doctor_lookup_by_name with doctor_name='{detected_doctor}' to find the doctor, then doctor_weekly_availability to show their schedule for next 7 days. When displaying doctor info, ALWAYS show as 'Dr. [Name] - [Specialization]' format."})
         session["last_doctor_query"] = detected_doctor
     
     
@@ -636,7 +733,7 @@ async def chat_stream(body: ChatIn):
         messages.append({"role": "system", "content": "Respond in English. Keep tool arguments in English."})
     
     # Strict tool usage
-    messages.append({"role": "system", "content": "For any current date/time or day-of-week question, call now_tool and answer from it. For any slots/dates/times, call availability_tool and only present what it returns. If the user challenges availability, re-check availability_tool for the mentioned date and correct yourself."})
+    messages.append({"role": "system", "content": "For any slots/dates/times, call availability_tool and only present what it returns. If the user challenges availability, re-check availability_tool for the mentioned date and correct yourself. Use the current date context provided above for date calculations."})
     # Fallback rule hint
     messages.append({"role": "system", "content": "If doctor_lookup returns empty, suggest a General Physician (Dr. Ali) instead of saying no doctors available."})
 

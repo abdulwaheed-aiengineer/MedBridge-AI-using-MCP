@@ -303,7 +303,8 @@
       color: var(--text-muted);
     }
 
-    .send-button {
+    /* Button Styles - Unified Design */
+    .action-btn {
       width: 44px;
       height: 44px;
       background: var(--accent);
@@ -314,26 +315,72 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s ease;
+      transition: all 0.2s ease;
       box-shadow: none;
     }
 
-    .send-button:hover { background: var(--accent-600); }
-
-    .send-button:hover {
+    .action-btn:hover { 
+      background: var(--accent-600); 
       transform: scale(1.05);
     }
 
-    .send-button:disabled {
+    .action-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
       transform: none;
     }
 
-    .send-icon {
+    .action-btn.recording {
+      background: #ef4444;
+      animation: pulse 1.5s infinite;
+    }
+
+    .action-btn.recording:hover {
+      background: #dc2626;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+
+    .btn-icon {
       width: 20px;
       height: 20px;
+    }
+
+    .send-icon {
       transform: rotate(45deg);
+    }
+
+    .voice-status {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: var(--spacing-xs);
+      text-align: center;
+      min-height: 16px;
+    }
+
+    .language-toggle {
+      background: var(--panel-muted);
+      border: 1px solid var(--border-light);
+      color: var(--text-dark);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      margin-left: var(--spacing-sm);
+    }
+
+    .language-toggle:hover {
+      background: #e2e8f0;
+    }
+
+    .language-toggle.active {
+      background: var(--accent);
+      color: white;
     }
 
     /* Loading animation */
@@ -447,11 +494,24 @@
           placeholder="Describe your symptoms or health concern..."
           rows="1"
         ></textarea>
-        <button class="send-button" id="sendButton">
-          <svg class="send-icon" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-          </svg>
-        </button>
+        <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
+          <button class="action-btn" id="voiceButton" title="Click to speak">
+            <svg class="btn-icon" id="voiceIcon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+            </svg>
+          </button>
+          <button class="action-btn" id="sendButton">
+            <svg class="btn-icon send-icon" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="voice-status" id="voiceStatus"></div>
+      <div style="display: flex; justify-content: center; align-items: center; margin-top: var(--spacing-sm);">
+        <span style="font-size: 12px; color: var(--text-muted); margin-right: var(--spacing-sm);">Voice Language:</span>
+        <button class="language-toggle active" id="langEnglish" data-lang="en-US">English</button>
+        <button class="language-toggle" id="langUrdu" data-lang="ur-PK">اردو</button>
       </div>
     </div>
   </div>
@@ -465,9 +525,17 @@
     const sendButton = document.getElementById('sendButton');
     const typingIndicator = document.getElementById('typingIndicator');
     const clearSessionBtn = document.getElementById('clearSessionBtn');
+    const voiceButton = document.getElementById('voiceButton');
+    const voiceStatus = document.getElementById('voiceStatus');
+    const voiceIcon = document.getElementById('voiceIcon');
+    const langEnglish = document.getElementById('langEnglish');
+    const langUrdu = document.getElementById('langUrdu');
 
     let sessionId = localStorage.getItem("mb_session_id") || "";
     let busy = false;
+    let isRecording = false;
+    let recognition = null;
+    let currentVoiceLang = 'en-US';
     
     function generateUUID() {
       if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -490,6 +558,143 @@
     ensureSessionId();
     // Always try to restore chat history for the current session
     restoreChatHistory();
+    
+    // Initialize voice recognition
+    initializeVoiceRecognition();
+    
+    // Voice Recognition Functions
+    function initializeVoiceRecognition() {
+      // Check if browser supports speech recognition
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        voiceButton.style.display = 'none';
+        voiceStatus.textContent = 'Voice input not supported in this browser';
+        return;
+      }
+      
+      // Initialize speech recognition
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SpeechRecognition();
+      
+      // Configure recognition settings
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = currentVoiceLang;
+      
+      // Event handlers
+      recognition.onstart = function() {
+        isRecording = true;
+        voiceButton.classList.add('recording');
+        voiceButton.disabled = true;
+        voiceStatus.textContent = 'Listening... Speak now';
+        // Change icon to stop icon
+        voiceIcon.innerHTML = '<path d="M6 6h12v12H6z"/>';
+      };
+      
+      recognition.onresult = function(event) {
+        let finalTranscript = '';
+        let interimTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        // Update input field with interim results
+        if (interimTranscript) {
+          messageInput.value = finalTranscript + interimTranscript;
+          resizeTextarea();
+        }
+        
+        // If we have final results, use them
+        if (finalTranscript) {
+          messageInput.value = finalTranscript;
+          resizeTextarea();
+        }
+      };
+      
+      recognition.onerror = function(event) {
+        console.error('Speech recognition error:', event.error);
+        let errorMessage = 'Voice input error: ';
+        switch(event.error) {
+          case 'no-speech':
+            errorMessage += 'No speech detected. Please try again.';
+            break;
+          case 'audio-capture':
+            errorMessage += 'Microphone not accessible. Please check permissions.';
+            break;
+          case 'not-allowed':
+            errorMessage += 'Microphone permission denied. Please allow microphone access.';
+            break;
+          case 'network':
+            errorMessage += 'Network error. Please check your connection.';
+            break;
+          default:
+            errorMessage += event.error;
+        }
+        voiceStatus.textContent = errorMessage;
+        stopRecording();
+      };
+      
+      recognition.onend = function() {
+        stopRecording();
+        // If we have text in the input, automatically send it
+        if (messageInput.value.trim() && !busy) {
+          setTimeout(() => {
+            sendMessage(messageInput.value);
+          }, 500); // Small delay to ensure recognition is complete
+        }
+      };
+    }
+    
+    function startRecording() {
+      if (!recognition || isRecording || busy) return;
+      
+      // Update language before starting
+      recognition.lang = currentVoiceLang;
+      
+      try {
+        recognition.start();
+      } catch (error) {
+        console.error('Error starting voice recognition:', error);
+        voiceStatus.textContent = 'Error starting voice input';
+      }
+    }
+    
+    function switchVoiceLanguage(lang) {
+      currentVoiceLang = lang;
+      
+      // Update button states
+      langEnglish.classList.toggle('active', lang === 'en-US');
+      langUrdu.classList.toggle('active', lang === 'ur-PK');
+      
+      // Update recognition language if recognition exists
+      if (recognition) {
+        recognition.lang = lang;
+      }
+      
+      // Update status message
+      const langName = lang === 'en-US' ? 'English' : 'اردو';
+      voiceStatus.textContent = `Voice language set to ${langName}`;
+      setTimeout(() => {
+        if (!isRecording) voiceStatus.textContent = '';
+      }, 2000);
+    }
+    
+    function stopRecording() {
+      if (recognition && isRecording) {
+        recognition.stop();
+      }
+      isRecording = false;
+      voiceButton.classList.remove('recording');
+      voiceButton.disabled = false;
+      voiceStatus.textContent = '';
+      // Restore microphone icon
+      voiceIcon.innerHTML = '<path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>';
+    }
     
     // Function to restore chat history from localStorage
     async function restoreChatHistory() {
@@ -774,6 +979,24 @@
     });
 
     messageInput.addEventListener('input', resizeTextarea);
+    
+    // Voice button event listener
+    voiceButton.addEventListener('click', () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+    
+    // Language toggle event listeners
+    langEnglish.addEventListener('click', () => {
+      switchVoiceLanguage('en-US');
+    });
+    
+    langUrdu.addEventListener('click', () => {
+      switchVoiceLanguage('ur-PK');
+    });
 
 
     // Suggestion chip listeners (for dynamically added chips)

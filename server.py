@@ -2,7 +2,7 @@
 import os, json
 from typing import List, Literal, Dict, Any, Optional
 from datetime import datetime, timedelta, time
-from zoneinfo import ZoneInfo
+import pytz
 
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
@@ -19,7 +19,7 @@ load_dotenv()
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DATA_PATH = os.getenv("HOSPITAL_DATA_PATH", "data/doctors.json")
 DEFAULT_TZ = os.getenv("CLINIC_TIMEZONE", "Asia/Karachi")
-SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+DEFAULT_SERVICE_ACCOUNT_FILE = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
@@ -34,6 +34,7 @@ def _abs(path: str) -> str:
 
 
 DATA_PATH = _abs(DEFAULT_DATA_PATH)
+SERVICE_ACCOUNT_FILE = _abs(DEFAULT_SERVICE_ACCOUNT_FILE) if DEFAULT_SERVICE_ACCOUNT_FILE else None
 
 
 def load_directory() -> Dict[str, Any]:
@@ -163,7 +164,7 @@ def doctor_weekly_availability(
         return {"error": f"Doctor '{doctor_name}' not found"}
     
     # Get next N days availability
-    today = datetime.now(ZoneInfo(DEFAULT_TZ)).date()
+    today = datetime.now(pytz.timezone(DEFAULT_TZ)).date()
     result_map = {}
     
     for i in range(days):
@@ -207,11 +208,11 @@ def _parse_time(t: str) -> time:
 
 
 def _localize(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=ZoneInfo(DEFAULT_TZ))
+    return pytz.timezone(DEFAULT_TZ).localize(dt)
 
 
 def _to_utc_iso(local_dt: datetime) -> str:
-    return local_dt.astimezone(ZoneInfo("UTC")).isoformat()
+    return local_dt.astimezone(pytz.UTC).isoformat()
 
 
 def _overlaps(slot_start: datetime, slot_end: datetime, busy: List[Dict[str, str]]) -> bool:
@@ -270,7 +271,7 @@ def availability_tool(
 
     # Default to today's date if date is missing/empty
     if not date or not str(date).strip():
-        date = datetime.now(ZoneInfo(DEFAULT_TZ)).date().isoformat()
+        date = datetime.now(pytz.timezone(DEFAULT_TZ)).date().isoformat()
 
     if not end_date:
         slots, meta = _compute_free_slots_for_date(doctor, date, slot_minutes)
@@ -354,12 +355,20 @@ def _compute_free_slots_for_date(doctor: Dict[str, Any], date: str, slot_minutes
             "timeZone": DEFAULT_TZ,
             "items": [{"id": doctor.get("calendar_id")}],
         }).execute()
-        busy_list = fb.get("calendars", {}).get(doctor.get("calendar_id"), {}).get("busy", [])
+        cal_data = fb.get("calendars", {}).get(doctor.get("calendar_id"), {})
+        # Check for calendar-level errors
+        if cal_data.get("errors"):
+            error_details = "; ".join([f"{e.get('reason')}: {e.get('domain')}" for e in cal_data.get("errors", [])])
+            print(f"[freebusy] Calendar access error for {doctor.get('calendar_id')}: {error_details}")
+            return [], {"code": "calendar_access_error", "warning": f"Calendar access denied. Please ensure calendar is shared with service account."}
+        busy_list = cal_data.get("busy", [])
     except Exception as e:
         print(f"[freebusy] ERROR: {e}")
-        return [], {"code": "freebusy_error", "warning": "Calendar free/busy query failed"}
+        import traceback
+        traceback.print_exc()
+        return [], {"code": "freebusy_error", "warning": f"Calendar query failed: {str(e)[:100]}"}
     free_slots: List[str] = []
-    now_local = datetime.now(ZoneInfo(DEFAULT_TZ))
+    now_local = datetime.now(pytz.timezone(DEFAULT_TZ))
     is_today = day_dt.date() == now_local.date()
     lead_delta = timedelta(minutes=MIN_LEAD_MINUTES)
     for s_start, s_end in slot_ranges:
@@ -444,7 +453,7 @@ def appointment_book_tool(
         return {"error": "Invalid patient_email."}
 
     # Reject booking inside the lead window
-    now_local = datetime.now(ZoneInfo(DEFAULT_TZ))
+    now_local = datetime.now(pytz.timezone(DEFAULT_TZ))
     lead_cutoff = now_local + timedelta(minutes=MIN_LEAD_MINUTES)
     if start_local < lead_cutoff:
         return {"error": f"Appointments must be booked at least {MIN_LEAD_MINUTES} minutes in advance."}
@@ -632,8 +641,8 @@ def appointment_book_tool(
 
 
 def _google_add_to_calendar_link(summary: str, start_local: datetime, end_local: datetime, details: str = "", location: Optional[str] = None) -> str:
-    start_utc = start_local.astimezone(ZoneInfo("UTC")).strftime("%Y%m%dT%H%M%SZ")
-    end_utc = end_local.astimezone(ZoneInfo("UTC")).strftime("%Y%m%dT%H%M%SZ")
+    start_utc = start_local.astimezone(pytz.UTC).strftime("%Y%m%dT%H%M%SZ")
+    end_utc = end_local.astimezone(pytz.UTC).strftime("%Y%m%dT%H%M%SZ")
     params = {
         "action": "TEMPLATE",
         "text": summary,
@@ -655,9 +664,9 @@ def _build_ics(
     attendee_emails: Optional[list[str]] = None,
     uid: Optional[str] = None,
 ) -> str:
-    start_utc = start_local.astimezone(ZoneInfo("UTC")).strftime("%Y%m%dT%H%M%SZ")
-    end_utc = end_local.astimezone(ZoneInfo("UTC")).strftime("%Y%m%dT%H%M%SZ")
-    dtstamp = datetime.now(ZoneInfo("UTC")).strftime("%Y%m%dT%H%M%SZ")
+    start_utc = start_local.astimezone(pytz.UTC).strftime("%Y%m%dT%H%M%SZ")
+    end_utc = end_local.astimezone(pytz.UTC).strftime("%Y%m%dT%H%M%SZ")
+    dtstamp = datetime.now(pytz.UTC).strftime("%Y%m%dT%H%M%SZ")
     uid_val = uid or f"{uuid4()}@unity-care"
     desc = (description or "").replace("\n", "\\n")
     lines = [
@@ -687,8 +696,9 @@ def _build_ics(
 @app.tool()
 def now_tool() -> Dict[str, Any]:
     """Return the current date/time in clinic timezone and UTC."""
-    now_local = datetime.now(ZoneInfo(DEFAULT_TZ))
-    now_utc = datetime.now(ZoneInfo("UTC"))
+    tz = pytz.timezone(DEFAULT_TZ)
+    now_local = datetime.now(tz)
+    now_utc = datetime.now(pytz.UTC)
     return {
         "timezone": DEFAULT_TZ,
         "date": now_local.date().isoformat(),
@@ -743,7 +753,7 @@ def list_appointments_tool(
     else:
         for d in DB.get("doctors", []):
             calendars.append({"id": d.get("calendar_id"), "doctor": d})
-    now_local = datetime.now(ZoneInfo(DEFAULT_TZ))
+    now_local = datetime.now(pytz.timezone(DEFAULT_TZ))
     time_min = now_local.isoformat()
     time_max = (now_local + timedelta(days=window_days)).isoformat()
     results: List[Dict[str, Any]] = []
@@ -789,11 +799,87 @@ def cancel_appointment_tool(
         ev = service.events().get(calendarId=d.get("calendar_id"), eventId=event_id).execute()
         if not _event_contains_patient(ev, patient_email):
             return {"error": "Unauthorized: event does not belong to the requesting patient."}
+        
+        # Extract appointment details for email
+        start_dt_str = (ev.get("start") or {}).get("dateTime") or (ev.get("start") or {}).get("date")
+        end_dt_str = (ev.get("end") or {}).get("dateTime") or (ev.get("end") or {}).get("date")
+        summary = ev.get("summary", "")
+        description = ev.get("description", "")
+        
+        # Parse dates for email formatting
+        try:
+            if "T" in start_dt_str:
+                start_local = datetime.fromisoformat(start_dt_str.replace("Z", "+00:00")).astimezone(pytz.timezone(DEFAULT_TZ))
+                end_local = datetime.fromisoformat(end_dt_str.replace("Z", "+00:00")).astimezone(pytz.timezone(DEFAULT_TZ))
+                human_date = start_local.strftime('%a, %d %b %Y')
+                human_time = f"{start_local.strftime('%H:%M')} - {end_local.strftime('%H:%M')} ({DEFAULT_TZ})"
+            else:
+                human_date = start_dt_str
+                human_time = "All day"
+        except Exception:
+            human_date = start_dt_str
+            human_time = ""
+        
+        # Extract patient name from summary or description
+        patient_name = "Patient"
+        if "↔" in summary:
+            parts = summary.split("↔")
+            if len(parts) > 1:
+                patient_name = parts[1].strip()
+        
         params = {}
         if notify_attendees:
             params["sendUpdates"] = "all"
         service.events().delete(calendarId=d.get("calendar_id"), eventId=event_id, **params).execute()
-        return {"ok": True}
+        
+        # Send cancellation emails
+        # Patient email
+        patient_subject = "Appointment Cancelled – Unity Care Clinic"
+        patient_body = f"""Dear {patient_name},
+
+Your appointment has been cancelled as requested. Here are the details:
+
+Doctor: {d.get('name')}
+Specialization: {d.get('specialization') or 'General'}
+Date: {human_date}
+Time: {human_time}
+
+If you wish to reschedule, please contact us or book a new appointment through our system.
+
+Thank you,
+Unity Care Clinic"""
+        
+        # Doctor email
+        doctor_subject = "Appointment Cancelled – Unity Care Clinic"
+        doctor_body = f"""Dear {d.get('name')},
+
+An appointment has been cancelled by the patient. Details are as follows:
+
+Patient: {patient_name}
+Patient email: {patient_email}
+Date: {human_date}
+Time: {human_time}
+
+This time slot is now available for other bookings.
+
+Thank you,
+Unity Care Clinic"""
+        
+        # Send emails (best-effort)
+        smtp_ok1, smtp_err1 = _send_plain_email([patient_email], patient_subject, patient_body)
+        smtp_ok2, smtp_err2 = (True, None)
+        if d.get("email"):
+            smtp_ok2, smtp_err2 = _send_plain_email([d.get("email")], doctor_subject, doctor_body)
+        
+        smtp_ok = smtp_ok1 and smtp_ok2
+        smtp_err = smtp_err1 or smtp_err2
+        
+        return {
+            "ok": True,
+            "message": "Appointment cancelled successfully.",
+            "smtp_status": "sent" if smtp_ok else "failed",
+            "smtp_error": smtp_err,
+        }
     except Exception as e:
         return {"error": f"Cancel error: {e}"}
 
@@ -815,7 +901,7 @@ def reschedule_tool(
         end_local = _localize(datetime.fromisoformat(new_end))
     except Exception:
         return {"error": "Invalid new_start/new_end format. Use YYYY-MM-DDTHH:MM"}
-    now_local = datetime.now(ZoneInfo(DEFAULT_TZ))
+    now_local = datetime.now(pytz.timezone(DEFAULT_TZ))
     lead_cutoff = now_local + timedelta(minutes=MIN_LEAD_MINUTES)
     if start_local < lead_cutoff:
         return {"error": f"Appointments must be rescheduled at least {MIN_LEAD_MINUTES} minutes in advance."}
@@ -828,12 +914,100 @@ def reschedule_tool(
         ev = service.events().get(calendarId=d.get("calendar_id"), eventId=event_id).execute()
         if not _event_contains_patient(ev, patient_email):
             return {"error": "Unauthorized: event does not belong to the requesting patient."}
+        
+        # Extract old appointment details
+        old_start_dt_str = (ev.get("start") or {}).get("dateTime") or (ev.get("start") or {}).get("date")
+        old_end_dt_str = (ev.get("end") or {}).get("dateTime") or (ev.get("end") or {}).get("date")
+        summary = ev.get("summary", "")
+        
+        # Parse old dates for email
+        try:
+            if "T" in old_start_dt_str:
+                old_start = datetime.fromisoformat(old_start_dt_str.replace("Z", "+00:00")).astimezone(pytz.timezone(DEFAULT_TZ))
+                old_end = datetime.fromisoformat(old_end_dt_str.replace("Z", "+00:00")).astimezone(pytz.timezone(DEFAULT_TZ))
+                old_date = old_start.strftime('%a, %d %b %Y')
+                old_time = f"{old_start.strftime('%H:%M')} - {old_end.strftime('%H:%M')}"
+            else:
+                old_date = old_start_dt_str
+                old_time = "All day"
+        except Exception:
+            old_date = old_start_dt_str
+            old_time = ""
+        
+        # Extract patient name from summary
+        patient_name = "Patient"
+        if "↔" in summary:
+            parts = summary.split("↔")
+            if len(parts) > 1:
+                patient_name = parts[1].strip()
+        
         ev["start"] = {"dateTime": start_local.isoformat(), "timeZone": DEFAULT_TZ}
         ev["end"] = {"dateTime": end_local.isoformat(), "timeZone": DEFAULT_TZ}
         updated = service.events().update(
             calendarId=d.get("calendar_id"), eventId=event_id, body=ev, sendUpdates="all"
         ).execute()
-        return {"ok": True, "event_link": updated.get("htmlLink")}
+        
+        # Format new dates for email
+        new_date = start_local.strftime('%a, %d %b %Y')
+        new_time = f"{start_local.strftime('%H:%M')} - {end_local.strftime('%H:%M')} ({DEFAULT_TZ})"
+        
+        # Send reschedule emails
+        # Patient email
+        patient_subject = "Appointment Rescheduled – Unity Care Clinic"
+        patient_body = f"""Dear {patient_name},
+
+Your appointment has been successfully rescheduled. Here are the updated details:
+
+Doctor: {d.get('name')}
+Specialization: {d.get('specialization') or 'General'}
+
+Previous Date: {old_date}
+Previous Time: {old_time}
+
+New Date: {new_date}
+New Time: {new_time}
+
+If you have any questions or need to make further changes, please contact us.
+
+Thank you,
+Unity Care Clinic"""
+        
+        # Doctor email
+        doctor_subject = "Appointment Rescheduled – Unity Care Clinic"
+        doctor_body = f"""Dear {d.get('name')},
+
+An appointment has been rescheduled by the patient. Details are as follows:
+
+Patient: {patient_name}
+Patient email: {patient_email}
+
+Previous Date: {old_date}
+Previous Time: {old_time}
+
+New Date: {new_date}
+New Time: {new_time}
+
+Please update your schedule accordingly.
+
+Thank you,
+Unity Care Clinic"""
+        
+        # Send emails (best-effort)
+        smtp_ok1, smtp_err1 = _send_plain_email([patient_email], patient_subject, patient_body)
+        smtp_ok2, smtp_err2 = (True, None)
+        if d.get("email"):
+            smtp_ok2, smtp_err2 = _send_plain_email([d.get("email")], doctor_subject, doctor_body)
+        
+        smtp_ok = smtp_ok1 and smtp_ok2
+        smtp_err = smtp_err1 or smtp_err2
+        
+        return {
+            "ok": True,
+            "event_link": updated.get("htmlLink"),
+            "message": "Appointment rescheduled successfully.",
+            "smtp_status": "sent" if smtp_ok else "failed",
+            "smtp_error": smtp_err,
+        }
     except Exception as e:
         return {"error": f"Reschedule error: {e}"}
 

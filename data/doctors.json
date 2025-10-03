@@ -50,6 +50,21 @@
     "headache": ["dr_ali"],
     "flu": ["dr_ali"],
     "eye_issue": ["dr_eric"],
-    "skin_rash": ["dr_diego"]
+    "skin_rash": ["dr_diego"],
+    "dermatology": ["dr_diego"],
+    "skin_specialist": ["dr_diego"],
+    "skin_problem": ["dr_diego"],
+    "skin_disease": ["dr_diego"],
+    "acne": ["dr_diego"],
+    "eczema": ["dr_diego"],
+    "psoriasis": ["dr_diego"],
+    "ophthalmology": ["dr_eric"],
+    "eye_specialist": ["dr_eric"],
+    "eye_problem": ["dr_eric"],
+    "vision": ["dr_eric"],
+    "general": ["dr_ali"],
+    "general_physician": ["dr_ali"],
+    "family_doctor": ["dr_ali"],
+    "primary_care": ["dr_ali"]
   }
 }
