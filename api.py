@@ -57,7 +57,23 @@ Flow:
 4) offer to check availability; 5) call availability_tool and show slots;
 6) when user picks a date, ALWAYS ask them to choose a specific time from slots;
 7) collect required fields (name, email) and optional (phone, age, sex);
-8) BEFORE BOOKING, present a short Review with hyphen bullets (Doctor, Date, Time, Mode, Fee PKR, Clinic). Ask: Confirm to book? Only on explicit yes/confirm/book/go ahead call appointment_book_tool.
+8) BEFORE BOOKING, present a COMPLETE Review with ALL collected information in this exact format:
+
+Here's a summary of your appointment details:
+- Doctor: Dr. [Name] - [Specialization]
+- Patient Name: [name]
+- Patient Email: [email]
+- Patient Phone: [phone if provided]
+- Patient Age: [age if provided]
+- Patient Sex: [sex if provided]
+- Date: [full date with day name]
+- Time: [HH:MM]
+- Mode: [online/in-person]
+- Fee: PKR [amount]
+- Clinic: [location]
+
+Then ask: "Please confirm to proceed with booking. Reply 'confirm' or 'yes' to book."
+Only on explicit yes/confirm/book/go ahead call appointment_book_tool.
 
 HARD REQUIREMENTS: 
 - NEVER display doctor names without their specialization
@@ -609,6 +625,8 @@ async def chat(body: ChatIn):
     messages.append({"role": "system", "content": "For any slots/dates/times, call availability_tool and only present what it returns. If the user challenges availability, re-check availability_tool for the mentioned date and correct yourself. Use the current date context provided above for date calculations."})
     # Fallback rule hint
     messages.append({"role": "system", "content": "If doctor_lookup returns empty, suggest a General Physician (Dr. Ali) instead of saying no doctors available."})
+    # Booking summary hint
+    messages.append({"role": "system", "content": "CRITICAL: Before booking, you MUST display a COMPLETE summary showing ALL collected patient information (name, email, phone, age, sex), doctor details, date, time, visit mode, fee, and clinic. If visit mode (online/in-person) is not provided, ASK the user to choose. NEVER skip the complete summary. NEVER book without explicit confirmation."})
 
     messages.append({"role": "user", "content": body.user})
 
@@ -736,6 +754,8 @@ async def chat_stream(body: ChatIn):
     messages.append({"role": "system", "content": "For any slots/dates/times, call availability_tool and only present what it returns. If the user challenges availability, re-check availability_tool for the mentioned date and correct yourself. Use the current date context provided above for date calculations."})
     # Fallback rule hint
     messages.append({"role": "system", "content": "If doctor_lookup returns empty, suggest a General Physician (Dr. Ali) instead of saying no doctors available."})
+    # Booking summary hint
+    messages.append({"role": "system", "content": "CRITICAL: Before booking, you MUST display a COMPLETE summary showing ALL collected patient information (name, email, phone, age, sex), doctor details, date, time, visit mode, fee, and clinic. If visit mode (online/in-person) is not provided, ASK the user to choose. NEVER skip the complete summary. NEVER book without explicit confirmation."})
 
     messages.append({"role": "user", "content": body.user})
 
